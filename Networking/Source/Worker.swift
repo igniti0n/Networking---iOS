@@ -41,7 +41,7 @@ extension Worker {
     }
     
     func responseDecodable<T: Decodable>(of type: T.Type, response: @escaping (T?) -> Void) {
-        decodingClosure = { [weak self] data in
+        decodingClosure = { data in
             guard let decodedObject =  try? JSONDecoder().decode(type, from: data) else {
                 response(nil)
                 return
@@ -51,11 +51,10 @@ extension Worker {
     }
     
     func execute(_ request: NetworkRequestProtocol) -> Self {
-        guard let urlRequest = makeURLRequest(request) else {
+        guard let urlRequest = constructURLRequest(request) else {
             failure?(.urlRequestConstruction)
             return self
         }
-        
         interceptor?.adapt(urlRequest: urlRequest, completion: { [weak self] result in
             switch result {
             case .success(let request):
@@ -65,13 +64,16 @@ extension Worker {
                 self?.failure?(.urlRequestConstruction)
             }
         })
+        if interceptor == nil {
+            makeNetworkRequest(with: urlRequest)
+        }
         return self
     }
 
     func executeConcurrently(_ request: NetworkRequestProtocol) async -> NetworkResponse {
         let response: NetworkResponse =  await withCheckedContinuation { continuation in
             var networkResponse = NetworkResponse()
-            guard let urlRequest = makeURLRequest(request) else {
+            guard let urlRequest = constructURLRequest(request) else {
                 networkResponse.failure = .urlRequestConstruction
                 continuation.resume(returning: networkResponse)
                 return
@@ -86,12 +88,15 @@ extension Worker {
                     continuation.resume(returning: networkResponse)
                 }
             })
+            
+            if interceptor == nil {
+                makeConcurrentNetworkRequest(with: urlRequest, networkResponse: networkResponse, continuation: continuation)
+            }
         }
         return response
     }
     
     func executeConcurrently<T : Decodable>(_ request: NetworkRequestProtocol, decodeWith type: T.Type) async -> (response: NetworkResponse, model: T?) {
-        
         let networkResponse: (response: NetworkResponse, model: T?) = await withCheckedContinuation { [weak self] continuation in
             guard let self = self else {
                 continuation.resume(returning: (NetworkResponse(), nil))
@@ -112,24 +117,42 @@ extension Worker {
     }
 }
 
-// MARK: - Private methods -
-
+// MARK: - Private methods
 private extension Worker {
-    func makeURLRequest(_ request: NetworkRequestProtocol) -> URLRequest? {
+    func constructURLRequest(_ request: NetworkRequestProtocol) -> URLRequest? {
+        // Construct url request with base url + query params
         guard var components = URLComponents(string: request.baseUrl) else { return nil }
-        components.queryItems = request.queryParameters.map({ query in
-            URLQueryItem(name: query.key, value: query.value)
-        })
-    
+        if !request.queryParameters.isEmpty {
+            components.queryItems = request.queryParameters.map({ query in
+                URLQueryItem(name: query.key, value: query.value)
+            })
+        }
         guard let url = components.url else { return nil }
-        print("Url: ", url)
-
         var urlRequest = URLRequest(url: url)
+        // Construct headers
         urlRequest.httpMethod = request.httpMethod.rawValue
         request.headers.forEach { header in
             urlRequest.addValue(header.value, forHTTPHeaderField: header.key)
         }
+        // Construct body as json data or urlEncoded data
+        if let requestBody = request.body {
+            if let contentType = urlRequest.allHTTPHeaderFields?["Content-Type"], contentType == "application/x-www-form-urlencoded" {
+                urlRequest.httpBody = encodeBodyToUrlEncodedData(requestBody)
+            } else {
+                urlRequest.httpBody = try? JSONSerialization.data(withJSONObject: requestBody)
+            }
+        }
         return urlRequest
+    }
+    
+    func encodeBodyToUrlEncodedData(_ body: [String: Any]) -> Data?  {
+        var formString = ""
+        body.forEach { (key: String, value: Any) in
+            guard let value = value as? String else { return }
+            let stringPart = formString.isEmpty ? "\(key)=\(value)" : "&\(key)=\(value)"
+            formString.append(contentsOf: stringPart)
+        }
+        return formString.data(using: .utf8)
     }
     
     func makeNetworkRequest(with urlRequest: URLRequest) {
@@ -187,12 +210,10 @@ private extension Worker {
                 errorHandler?(.responseInvalid)
                 return nil
             }
-        
         guard (200...299).contains(response.statusCode) else {
             errorHandler?(.statusCode)
             return nil
         }
-        
         if let _ = error {
             errorHandler?(.error)
             return nil
