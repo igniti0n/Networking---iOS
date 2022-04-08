@@ -10,5 +10,5 @@ import Foundation
 struct NetworkResponse {
     var data: Data?
     var jsonResponse: Any?
-    var failure: NetworkFailure?
+    var failure: Error?
 }

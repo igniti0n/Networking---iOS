@@ -89,7 +89,7 @@ extension NetworkManager {
         let response: NetworkResponse =  await withCheckedContinuation { continuation in
             var networkResponse = NetworkResponse()
             guard let urlRequest = constructURLRequest(networkRequest) else {
-                networkResponse.failure = .urlRequestConstruction
+                networkResponse.failure = NetworkFailure.urlRequestConstruction
                 continuation.resume(returning: networkResponse)
                 return
             }
@@ -98,9 +98,8 @@ extension NetworkManager {
                 case .success(let request):
                     self?.makeConcurrentNetworkRequest(with: request, for: networkRequest, continuation: continuation)
                 case .failure(let error):
-                    print("Error while adapting request: ", error)
-                    networkResponse.failure = .urlRequestConstruction
-                    continuation.resume(returning: networkResponse)
+                    print("Error while adapting request: ", networkResponse.failure)
+                    self?.handleErrorConcurrently(networkResponse: networkResponse, error, urlRequest, nil, networkRequest: networkRequest, continuation: continuation)
                 }
             })
             if interceptor == nil {
@@ -118,10 +117,15 @@ extension NetworkManager {
             }
             Task {
                 var response = await self.executeConcurrently(request)
+                // If request failed, return. Otherwise, try to decode to desired model
+                if let failure = response.failure {
+                    continuation.resume(returning: (response, nil))
+                    return
+                }
                 guard
                     let data = response.data,
                     let model = try? JSONDecoder().decode(type, from: data) else {
-                        response.failure = .decoding
+                        response.failure = NetworkFailure.decoding
                         continuation.resume(returning: (response, nil))
                         return
                     }
@@ -208,7 +212,7 @@ private extension NetworkManager {
             // Generate JSON object
             guard let jsonObject = try? JSONSerialization.jsonObject(with: data)
             else {
-                networkResponse.failure = .jsonObject
+                networkResponse.failure = NetworkFailure.jsonObject
                 continuation.resume(returning: networkResponse)
                 return
             }
@@ -261,25 +265,27 @@ private extension NetworkManager {
         }
     }
     
-    func handleErrorConcurrently(networkResponse: NetworkResponse, _ error: Error?, _ request: URLRequest, _ reponse: URLResponse?,  networkRequest: NetworkRequestProtocol, continuation: CheckedContinuation<NetworkResponse, Never>) {
+    func handleErrorConcurrently(networkResponse: NetworkResponse, _ error: Error?, _ request: URLRequest, _ urlResponse: URLResponse?,  networkRequest: NetworkRequestProtocol, continuation: CheckedContinuation<NetworkResponse, Never>) {
+        var newNetworkResponse = networkResponse
+        newNetworkResponse.failure = error
         guard let interceptor = interceptor else {
-            continuation.resume(returning: networkResponse)
+            continuation.resume(returning: newNetworkResponse)
             return
         }
         if(repeatCount < 1) {
-            print("Will not repeat anymore, returning error: ", error)
+            print("Will not repeat anymore, returning error: ", error ?? "")
             repeatCount = 1
-            continuation.resume(returning: networkResponse)
+            continuation.resume(returning: newNetworkResponse)
         } else {
             repeatCount -= 1
-            interceptor.retry(request, networkRequest: networkRequest, reponse, dueTo: error) { [weak self] retryResult in
+            interceptor.retry(request, networkRequest: networkRequest, urlResponse, dueTo: error) { [weak self] retryResult in
                 switch retryResult {
                 case .retry:
-                    print("Repeating request that ended in error:", error)
+                    print("Repeating request that ended in error:", newNetworkResponse.failure ?? "")
                     self?.makeConcurrentNetworkRequest(with: request, for: networkRequest, continuation: continuation)
                 case .doNotRetry:
                     print("Choosing not to repeat the request.")
-                    continuation.resume(returning: networkResponse)
+                    continuation.resume(returning: newNetworkResponse)
                 }
             }
         }
