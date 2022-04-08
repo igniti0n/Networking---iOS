@@ -35,6 +35,8 @@ class ViewController: UIViewController {
     }
 }
 
+// unckecked??
+
 class CustomInterceptor: Interceptor {
     func adapt(urlRequest: URLRequest, networkRequest: NetworkRequestProtocol, completion: @escaping (Result<URLRequest, Error>) -> Void) {
         print("******** INCOMING REQUEST *********")
