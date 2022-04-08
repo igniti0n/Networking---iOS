@@ -13,6 +13,7 @@ enum RetryResult {
 }
 
 protocol Interceptor {
-    func adapt( urlRequest: URLRequest, completion: @escaping (Result<URLRequest, Error>) -> Void)
-    func retry(_ request: URLRequest, _ reponse: URLResponse?, dueTo error: Error?, completion: @escaping (RetryResult) -> Void)
+    func adapt( urlRequest: URLRequest, networkRequest: NetworkRequestProtocol, completion: @escaping (Result<URLRequest, Error>) -> Void)
+    func retry(_ request: URLRequest, networkRequest: NetworkRequestProtocol, _ reponse: URLResponse?, dueTo error: Error?, completion: @escaping (RetryResult) -> Void)
 }
+

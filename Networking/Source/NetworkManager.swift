@@ -1,10 +1,9 @@
 //
-//  Worker.swift
-//  Networking
+//  NetworkManager.swift
+//  watch_stage WatchKit Extension
 //
-//  Created by Ivan Stajcer on 09.03.2022..
+//  Created by Ivan Stajcer on 07.04.2022..
 //
-
 import Foundation
 
 typealias JSONResponse = ([String : Any]?) -> Void
@@ -12,35 +11,50 @@ typealias ErrorResponse = (NetworkFailure) -> Void
 
 enum NetworkFailure: Error {
     case statusCode
-    case responseInvalid
+    case responseNotHTTP
     case urlRequestConstruction
+    case tokenExpired
+    case tokenUnknown
     case decoding
     case jsonObject
-    case error
+    case serverError
 }
 
-final class Worker {
+final class NetworkManager {
     // MARK: - Properties
-    var interceptor: Interceptor?
+    static var shared = NetworkManager()
+    private var interceptor: Interceptor?
     private var jsonResponse: JSONResponse?
     private var failure: ErrorResponse?
     private var decodingClosure: ((Data) -> Void)?
     private var networkResponse: NetworkResponse?
     private var repeatCount = 1
+    
+    // MARK: - Init
+    private init() {}
 }
 
 // MARK: - Public methods
-extension Worker {
+extension NetworkManager {
+    func setInterceptor(to interceptor: Interceptor) {
+        self.interceptor = interceptor
+    }
+    
+    func removeInterceptor() {
+        interceptor = nil
+    }
+    
     func handleError(response: @escaping ErrorResponse) -> Self {
         failure = response
         return self
     }
     
-    func responseJson(response: @escaping JSONResponse) {
+    func responseJson(response: @escaping JSONResponse) -> Self {
         jsonResponse = response
+        return self
     }
     
-    func responseDecodable<T: Decodable>(of type: T.Type, response: @escaping (T?) -> Void) {
+    func responseDecodable<T: Decodable>(of type: T.Type, response: @escaping (T?) -> Void) -> Self {
         decodingClosure = { data in
             guard let decodedObject =  try? JSONDecoder().decode(type, from: data) else {
                 response(nil)
@@ -48,49 +62,49 @@ extension Worker {
             }
             response(decodedObject)
         }
+        return self
     }
     
-    func execute(_ request: NetworkRequestProtocol) -> Self {
-        guard let urlRequest = constructURLRequest(request) else {
+    func execute(_ networkRequest: NetworkRequestProtocol) -> Self {
+        guard let urlRequest = constructURLRequest(networkRequest) else {
             failure?(.urlRequestConstruction)
             return self
         }
-        interceptor?.adapt(urlRequest: urlRequest, completion: { [weak self] result in
+        interceptor?.adapt(urlRequest: urlRequest, networkRequest: networkRequest, completion: { [weak self] result in
             switch result {
             case .success(let request):
-                self?.makeNetworkRequest(with: request)
+                self?.makeNetworkRequest(with: request, for: networkRequest)
             case .failure(let error):
                 print("Error while adapting request: ", error)
                 self?.failure?(.urlRequestConstruction)
             }
         })
         if interceptor == nil {
-            makeNetworkRequest(with: urlRequest)
+            makeNetworkRequest(with: urlRequest, for: networkRequest)
         }
         return self
     }
-
-    func executeConcurrently(_ request: NetworkRequestProtocol) async -> NetworkResponse {
+    
+    func executeConcurrently(_ networkRequest: NetworkRequestProtocol) async -> NetworkResponse {
         let response: NetworkResponse =  await withCheckedContinuation { continuation in
             var networkResponse = NetworkResponse()
-            guard let urlRequest = constructURLRequest(request) else {
+            guard let urlRequest = constructURLRequest(networkRequest) else {
                 networkResponse.failure = .urlRequestConstruction
                 continuation.resume(returning: networkResponse)
                 return
             }
-            interceptor?.adapt(urlRequest: urlRequest, completion: { [weak self] result in
+            interceptor?.adapt(urlRequest: urlRequest, networkRequest: networkRequest, completion: { [weak self] result in
                 switch result {
                 case .success(let request):
-                    self?.makeConcurrentNetworkRequest(with: request, networkResponse: networkResponse, continuation: continuation)
+                    self?.makeConcurrentNetworkRequest(with: request, for: networkRequest, continuation: continuation)
                 case .failure(let error):
                     print("Error while adapting request: ", error)
                     networkResponse.failure = .urlRequestConstruction
                     continuation.resume(returning: networkResponse)
                 }
             })
-            
             if interceptor == nil {
-                makeConcurrentNetworkRequest(with: urlRequest, networkResponse: networkResponse, continuation: continuation)
+                makeConcurrentNetworkRequest(with: urlRequest, for: networkRequest, continuation: continuation)
             }
         }
         return response
@@ -103,13 +117,14 @@ extension Worker {
                 return
             }
             Task {
-                let response = await self.executeConcurrently(request)
+                var response = await self.executeConcurrently(request)
                 guard
                     let data = response.data,
                     let model = try? JSONDecoder().decode(type, from: data) else {
-                    continuation.resume(returning: (response, nil))
-                    return
-                }
+                        response.failure = .decoding
+                        continuation.resume(returning: (response, nil))
+                        return
+                    }
                 continuation.resume(returning: (response, model))
             }
         }
@@ -118,7 +133,7 @@ extension Worker {
 }
 
 // MARK: - Private methods
-private extension Worker {
+private extension NetworkManager {
     func constructURLRequest(_ request: NetworkRequestProtocol) -> URLRequest? {
         // Construct url request with base url + query params
         guard var components = URLComponents(string: request.baseUrl) else { return nil }
@@ -155,11 +170,11 @@ private extension Worker {
         return formString.data(using: .utf8)
     }
     
-    func makeNetworkRequest(with urlRequest: URLRequest) {
+    func makeNetworkRequest(with urlRequest: URLRequest, for networkRequest: NetworkRequestProtocol) {
         let task = URLSession.shared.dataTask(with: urlRequest) { [weak self] data, response, error in
             // Validate response
             guard let data = self?.validate(data: data, response: response, error: error, errorHandler: { [weak self] networkFailure in
-                self?.handleError(error, networkFailure: networkFailure, urlRequest, response)
+                self?.handleError(error, networkFailure: networkFailure, urlRequest, networkRequest: networkRequest, response)
             }) else {
                 return
             }
@@ -178,22 +193,23 @@ private extension Worker {
         task.resume()
     }
     
-    func makeConcurrentNetworkRequest(with urlRequest: URLRequest, networkResponse: NetworkResponse, continuation: CheckedContinuation<NetworkResponse, Never>) {
+    func makeConcurrentNetworkRequest(with urlRequest: URLRequest, for networkRequest: NetworkRequestProtocol, continuation: CheckedContinuation<NetworkResponse, Never>) {
         var networkResponse = NetworkResponse()
         let task = URLSession.shared.dataTask(with: urlRequest) { [weak self] data, response, error in
             // Validate response
             guard
                 let data = self?.validate(data: data, response: response, error: error, errorHandler: { [weak self] networkFailure in
                     networkResponse.failure = networkFailure
-                    self?.handleErrorConcurrently(networkResponse: networkResponse, error, urlRequest, response, continuation: continuation)
+                    self?.handleErrorConcurrently(networkResponse: networkResponse, error, urlRequest, response, networkRequest: networkRequest, continuation: continuation)
                 }) else {
                     return
                 }
+            networkResponse.data = data
             // Generate JSON object
-            guard let jsonObject = try? JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed) as? [String : Any]
+            guard let jsonObject = try? JSONSerialization.jsonObject(with: data)
             else {
                 networkResponse.failure = .jsonObject
-               continuation.resume(returning: networkResponse)
+                continuation.resume(returning: networkResponse)
                 return
             }
             // All good, return json object
@@ -207,21 +223,22 @@ private extension Worker {
         guard
             let data = data,
             let response = response as? HTTPURLResponse else {
-                errorHandler?(.responseInvalid)
+                errorHandler?(.responseNotHTTP)
                 return nil
             }
+        
         guard (200...299).contains(response.statusCode) else {
             errorHandler?(.statusCode)
             return nil
         }
         if let _ = error {
-            errorHandler?(.error)
+            errorHandler?(.serverError)
             return nil
         }
         return data
     }
     
-    func handleError(_ error: Error?, networkFailure: NetworkFailure, _ request: URLRequest, _ reponse: URLResponse?) {
+    func handleError(_ error: Error?, networkFailure: NetworkFailure, _ request: URLRequest, networkRequest: NetworkRequestProtocol, _ reponse: URLResponse?) {
         guard let interceptor = interceptor else {
             failure?(networkFailure)
             return
@@ -232,11 +249,11 @@ private extension Worker {
             failure?(networkFailure)
         } else {
             repeatCount -= 1
-            interceptor.retry(request, reponse, dueTo: error) { [weak self] retryResult in
+            interceptor.retry(request, networkRequest: networkRequest, reponse, dueTo: error) { [weak self] retryResult in
                 switch retryResult {
                 case .retry:
                     print("Repeating request that ended in error:", error)
-                    self?.makeNetworkRequest(with: request)
+                    self?.makeNetworkRequest(with: request, for: networkRequest)
                 case .doNotRetry:
                     print("Choosing not to repeat the request.")
                 }
@@ -244,7 +261,7 @@ private extension Worker {
         }
     }
     
-    func handleErrorConcurrently(networkResponse: NetworkResponse, _ error: Error?, _ request: URLRequest, _ reponse: URLResponse?, continuation: CheckedContinuation<NetworkResponse, Never>) {
+    func handleErrorConcurrently(networkResponse: NetworkResponse, _ error: Error?, _ request: URLRequest, _ reponse: URLResponse?,  networkRequest: NetworkRequestProtocol, continuation: CheckedContinuation<NetworkResponse, Never>) {
         guard let interceptor = interceptor else {
             continuation.resume(returning: networkResponse)
             return
@@ -255,15 +272,17 @@ private extension Worker {
             continuation.resume(returning: networkResponse)
         } else {
             repeatCount -= 1
-            interceptor.retry(request, reponse, dueTo: error) { [weak self] retryResult in
+            interceptor.retry(request, networkRequest: networkRequest, reponse, dueTo: error) { [weak self] retryResult in
                 switch retryResult {
                 case .retry:
                     print("Repeating request that ended in error:", error)
-                    self?.makeConcurrentNetworkRequest(with: request, networkResponse: networkResponse, continuation: continuation)
+                    self?.makeConcurrentNetworkRequest(with: request, for: networkRequest, continuation: continuation)
                 case .doNotRetry:
                     print("Choosing not to repeat the request.")
+                    continuation.resume(returning: networkResponse)
                 }
             }
         }
     }
 }
+
