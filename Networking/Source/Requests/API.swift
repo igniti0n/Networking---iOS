@@ -8,8 +8,8 @@
 import Foundation
 
 struct API {
-    static let baseUrlAuth = "https://alkogtidentity.azurewebsites.net/connect/token"
-    static let baseUrlStage = "https://stage.al-ko.com/v1/iot/things"
+    static let baseUrlAuth = "https://alkogtidentity.azurewebsites.net/"
+    static let baseUrlStage = "https://stage.al-ko.com/v1/iot/"
     static let baseHeadersAuth = ["Content-Type" : "application/x-www-form-urlencoded"]
     static let baseHeadersStage = ["Content-Type" : "application/application/json"]
     

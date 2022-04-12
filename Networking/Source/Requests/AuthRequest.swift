@@ -7,15 +7,17 @@
 
 import Foundation
 
+//    var baseUrl = API.baseUrlAuth
+
 struct AuthRequest: NetworkRequestProtocol {
-    var baseUrl = API.baseUrlAuth
+    var path = "connect/token"
+    var resourceEncoding: ResourceEncoding = .urlEncoded
     var headers: [String : String] = API.baseHeadersAuth
     var queryParameters: [String : String] = [:]
     var httpMethod: HTTPMetod = .POST
     var body: [String : Any]? = [:]
     
     mutating func createBody(username: String, password: String) {
-        body = [:]
         body?.updateValue(username, forKey: "username")
         body?.updateValue(password, forKey: "password")
         body?.updateValue(API.Auth.stageGrantType, forKey: "grant_type")

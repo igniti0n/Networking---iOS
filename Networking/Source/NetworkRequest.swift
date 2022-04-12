@@ -11,10 +11,16 @@ enum HTTPMetod: String {
     case GET, POST, PUT, PATCH, DELETE
 }
 
+enum ResourceEncoding {
+    case urlEncoded
+    case json
+}
+
 protocol NetworkRequestProtocol {
-    var baseUrl: String { get }
+    var path: String { get }
     var headers: [String : String] { get }
     var queryParameters: [String : String] { get }
     var httpMethod: HTTPMetod { get }
+    var resourceEncoding: ResourceEncoding { get }
     var body: [String: Any]? { get set }
 }

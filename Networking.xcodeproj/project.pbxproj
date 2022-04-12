@@ -11,7 +11,7 @@
 		A52ADEEE27FC369B00791875 /* AuthRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = A52ADEED27FC369B00791875 /* AuthRequest.swift */; };
 		A52ADEF027FC473F00791875 /* DevicesListRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = A52ADEEF27FC473F00791875 /* DevicesListRequest.swift */; };
 		A52ADEF327FC475C00791875 /* API.swift in Sources */ = {isa = PBXBuildFile; fileRef = A52ADEF227FC475C00791875 /* API.swift */; };
-		A5CF84E127FEED020026419B /* WeatherRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5CF84E027FEED020026419B /* WeatherRequest.swift */; };
+		A567D2672804D70E00827CE0 /* TokenModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A567D2662804D70E00827CE0 /* TokenModel.swift */; };
 		A5F08E2327D8A82C00E8276F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5F08E2227D8A82C00E8276F /* AppDelegate.swift */; };
 		A5F08E2527D8A82C00E8276F /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5F08E2427D8A82C00E8276F /* SceneDelegate.swift */; };
 		A5F08E2727D8A82C00E8276F /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5F08E2627D8A82C00E8276F /* ViewController.swift */; };
@@ -28,7 +28,7 @@
 		A52ADEED27FC369B00791875 /* AuthRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthRequest.swift; sourceTree = "<group>"; };
 		A52ADEEF27FC473F00791875 /* DevicesListRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevicesListRequest.swift; sourceTree = "<group>"; };
 		A52ADEF227FC475C00791875 /* API.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = API.swift; sourceTree = "<group>"; };
-		A5CF84E027FEED020026419B /* WeatherRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherRequest.swift; sourceTree = "<group>"; };
+		A567D2662804D70E00827CE0 /* TokenModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenModel.swift; sourceTree = "<group>"; };
 		A5F08E1F27D8A82C00E8276F /* Networking.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Networking.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A5F08E2227D8A82C00E8276F /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		A5F08E2427D8A82C00E8276F /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
@@ -59,7 +59,6 @@
 				A52ADEF227FC475C00791875 /* API.swift */,
 				A52ADEED27FC369B00791875 /* AuthRequest.swift */,
 				A52ADEEF27FC473F00791875 /* DevicesListRequest.swift */,
-				A5CF84E027FEED020026419B /* WeatherRequest.swift */,
 			);
 			path = Requests;
 			sourceTree = "<group>";
@@ -85,6 +84,7 @@
 			children = (
 				A5F08E2227D8A82C00E8276F /* AppDelegate.swift */,
 				A5F08E2427D8A82C00E8276F /* SceneDelegate.swift */,
+				A567D2662804D70E00827CE0 /* TokenModel.swift */,
 				A5F08E2627D8A82C00E8276F /* ViewController.swift */,
 				A5F08E3627D8A9F700E8276F /* Source */,
 				A5F08E2827D8A82C00E8276F /* Main.storyboard */,
@@ -179,11 +179,11 @@
 			buildActionMask = 2147483647;
 			files = (
 				A52ADEEC27FB4F7100791875 /* Interceptor.swift in Sources */,
+				A567D2672804D70E00827CE0 /* TokenModel.swift in Sources */,
 				A5F08E3A27D8BE1B00E8276F /* NetworkManager.swift in Sources */,
 				A5F08E2727D8A82C00E8276F /* ViewController.swift in Sources */,
 				A52ADEF027FC473F00791875 /* DevicesListRequest.swift in Sources */,
 				A52ADEF327FC475C00791875 /* API.swift in Sources */,
-				A5CF84E127FEED020026419B /* WeatherRequest.swift in Sources */,
 				A5F08E2327D8A82C00E8276F /* AppDelegate.swift in Sources */,
 				A5F08E3827D8BAB700E8276F /* NetworkRequest.swift in Sources */,
 				A5F08E2527D8A82C00E8276F /* SceneDelegate.swift in Sources */,

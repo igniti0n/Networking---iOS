@@ -22,20 +22,26 @@ enum NetworkFailure: Error {
 
 final class NetworkManager {
     // MARK: - Properties
-    static var shared = NetworkManager()
+    private var baseUrl: String
     private var interceptor: Interceptor?
     private var jsonResponse: JSONResponse?
     private var failure: ErrorResponse?
-    private var decodingClosure: ((Data) -> Void)?
     private var networkResponse: NetworkResponse?
+    private var decodingClosure: ((Data) -> Void)?
     private var repeatCount = 1
     
-    // MARK: - Init
-    private init() {}
+    // MARK: - init
+    init(baseUrl: String, interceptor: Interceptor?) {
+        self.baseUrl = baseUrl
+        self.interceptor = interceptor
+    }
 }
 
 // MARK: - Public methods
 extension NetworkManager {
+    func setBaseUrl(to url: String) {
+        baseUrl = url
+    }
     func setInterceptor(to interceptor: Interceptor) {
         self.interceptor = interceptor
     }
@@ -140,7 +146,7 @@ extension NetworkManager {
 private extension NetworkManager {
     func constructURLRequest(_ request: NetworkRequestProtocol) -> URLRequest? {
         // Construct url request with base url + query params
-        guard var components = URLComponents(string: request.baseUrl) else { return nil }
+        guard var components = URLComponents(string: baseUrl + request.path) else { return nil }
         if !request.queryParameters.isEmpty {
             components.queryItems = request.queryParameters.map({ query in
                 URLQueryItem(name: query.key, value: query.value)
@@ -153,12 +159,13 @@ private extension NetworkManager {
         request.headers.forEach { header in
             urlRequest.addValue(header.value, forHTTPHeaderField: header.key)
         }
-        // Construct body as json data or urlEncoded data
         if let requestBody = request.body {
-            if let contentType = urlRequest.allHTTPHeaderFields?["Content-Type"], contentType == "application/x-www-form-urlencoded" {
-                urlRequest.httpBody = encodeBodyToUrlEncodedData(requestBody)
-            } else {
-                urlRequest.httpBody = try? JSONSerialization.data(withJSONObject: requestBody)
+            // Construct body as json data or urlEncoded data
+            switch request.resourceEncoding {
+                case .urlEncoded:
+                    urlRequest.httpBody = encodeBodyToUrlEncodedData(requestBody)
+                case .json:
+                    urlRequest.httpBody = try? JSONSerialization.data(withJSONObject: requestBody)
             }
         }
         return urlRequest
@@ -231,6 +238,12 @@ private extension NetworkManager {
                 return nil
             }
         
+        
+        if (response.statusCode == 401) {
+            errorHandler?(.tokenExpired)
+            return nil
+        }
+        
         guard (200...299).contains(response.statusCode) else {
             errorHandler?(.statusCode)
             return nil
@@ -260,32 +273,31 @@ private extension NetworkManager {
                     self?.makeNetworkRequest(with: request, for: networkRequest)
                 case .doNotRetry:
                     print("Choosing not to repeat the request.")
+                    self?.failure?(networkFailure)
                 }
             }
         }
     }
     
     func handleErrorConcurrently(networkResponse: NetworkResponse, _ error: Error?, _ request: URLRequest, _ urlResponse: URLResponse?,  networkRequest: NetworkRequestProtocol, continuation: CheckedContinuation<NetworkResponse, Never>) {
-        var newNetworkResponse = networkResponse
-        newNetworkResponse.failure = error
         guard let interceptor = interceptor else {
-            continuation.resume(returning: newNetworkResponse)
+            continuation.resume(returning: networkResponse)
             return
         }
         if(repeatCount < 1) {
-            print("Will not repeat anymore, returning error: ", error ?? "")
+            print("Will not repeat anymore, repeat count < 1, returning error: ", error ?? "")
             repeatCount = 1
-            continuation.resume(returning: newNetworkResponse)
+            continuation.resume(returning: networkResponse)
         } else {
             repeatCount -= 1
-            interceptor.retry(request, networkRequest: networkRequest, urlResponse, dueTo: error) { [weak self] retryResult in
+            interceptor.retry(request, networkRequest: networkRequest, urlResponse, dueTo: networkResponse.failure ?? error) { [weak self] retryResult in
                 switch retryResult {
                 case .retry:
-                    print("Repeating request that ended in error:", newNetworkResponse.failure ?? "")
+                    print("Repeating request that ended in error:", networkResponse.failure ?? "")
                     self?.makeConcurrentNetworkRequest(with: request, for: networkRequest, continuation: continuation)
                 case .doNotRetry:
                     print("Choosing not to repeat the request.")
-                    continuation.resume(returning: newNetworkResponse)
+                    continuation.resume(returning: networkResponse)
                 }
             }
         }

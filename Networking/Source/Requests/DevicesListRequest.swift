@@ -8,7 +8,8 @@
 import Foundation
 
 struct DevicesListRequest: NetworkRequestProtocol {
-    var baseUrl = API.baseUrlStage
+    var path = "things"
+    var resourceEncoding: ResourceEncoding = .json
     var headers: [String : String] = API.baseHeadersStage
     var queryParameters: [String : String] = [:]
     var httpMethod: HTTPMetod = .GET
