@@ -12,7 +12,7 @@ import Foundation
 struct AuthRequest: NetworkRequestProtocol {
     var path = "connect/token"
     var resourceEncoding: ResourceEncoding = .urlEncoded
-    var headers: [String : String] = API.baseHeadersAuth
+    var headers: [String : String] = ConfigurationProvider.shared.baseHeadersAuth
     var queryParameters: [String : String] = [:]
     var httpMethod: HTTPMetod = .POST
     var body: [String : Any]? = [:]
@@ -20,9 +20,9 @@ struct AuthRequest: NetworkRequestProtocol {
     mutating func createBody(username: String, password: String) {
         body?.updateValue(username, forKey: "username")
         body?.updateValue(password, forKey: "password")
-        body?.updateValue(API.Auth.stageGrantType, forKey: "grant_type")
-        body?.updateValue(API.Auth.stageClientId, forKey: "client_id")
-        body?.updateValue(API.Auth.stageClientSecret, forKey: "client_secret")
-        body?.updateValue(API.Auth.stageScope, forKey: "scope")
+        body?.updateValue(ConfigurationProvider.shared.loginGrantType, forKey: "grant_type")
+        body?.updateValue(ConfigurationProvider.shared.clientId, forKey: "client_id")
+        body?.updateValue(ConfigurationProvider.shared.clientSecret, forKey: "client_secret")
+        body?.updateValue(ConfigurationProvider.shared.scope, forKey: "scope")
     }
 }

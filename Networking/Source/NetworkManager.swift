@@ -10,14 +10,38 @@ typealias JSONResponse = ([String : Any]?) -> Void
 typealias ErrorResponse = (NetworkFailure) -> Void
 
 enum NetworkFailure: Error {
-    case statusCode
+    case statusCode(StatusCode)
     case responseNotHTTP
     case urlRequestConstruction
     case tokenExpired
     case tokenUnknown
     case decoding
-    case jsonObject
+    case error
+}
+
+enum StatusCode {
+    case notFound
+    case badRequest
+    case unauthorized
+    case forbidden
+    case notAllowed
+    case timeout
     case serverError
+    case other(Int)
+    
+    init(code: Int) {
+        switch code {
+        case 500..<600: self = .serverError
+        case 404: self = .notFound
+        case 400: self = .badRequest
+        case 401: self = .unauthorized
+        case 403: self = .forbidden
+        case 405: self = .notAllowed
+        case 408: self = .timeout
+        default: self = .other(code)
+        }
+    }
+    
 }
 
 final class NetworkManager {
@@ -29,19 +53,18 @@ final class NetworkManager {
     private var networkResponse: NetworkResponse?
     private var decodingClosure: ((Data) -> Void)?
     private var repeatCount = 1
+    private var shouldLogTraffic: Bool
     
     // MARK: - init
-    init(baseUrl: String, interceptor: Interceptor?) {
+    init(baseUrl: String, interceptor: Interceptor? = nil, shouldLogTraffic: Bool = true) {
         self.baseUrl = baseUrl
         self.interceptor = interceptor
+        self.shouldLogTraffic = shouldLogTraffic
     }
 }
 
 // MARK: - Public methods
 extension NetworkManager {
-    func setBaseUrl(to url: String) {
-        baseUrl = url
-    }
     func setInterceptor(to interceptor: Interceptor) {
         self.interceptor = interceptor
     }
@@ -50,45 +73,8 @@ extension NetworkManager {
         interceptor = nil
     }
     
-    func handleError(response: @escaping ErrorResponse) -> Self {
-        failure = response
-        return self
-    }
-    
-    func responseJson(response: @escaping JSONResponse) -> Self {
-        jsonResponse = response
-        return self
-    }
-    
-    func responseDecodable<T: Decodable>(of type: T.Type, response: @escaping (T?) -> Void) -> Self {
-        decodingClosure = { data in
-            guard let decodedObject =  try? JSONDecoder().decode(type, from: data) else {
-                response(nil)
-                return
-            }
-            response(decodedObject)
-        }
-        return self
-    }
-    
-    func execute(_ networkRequest: NetworkRequestProtocol) -> Self {
-        guard let urlRequest = constructURLRequest(networkRequest) else {
-            failure?(.urlRequestConstruction)
-            return self
-        }
-        interceptor?.adapt(urlRequest: urlRequest, networkRequest: networkRequest, completion: { [weak self] result in
-            switch result {
-            case .success(let request):
-                self?.makeNetworkRequest(with: request, for: networkRequest)
-            case .failure(let error):
-                print("Error while adapting request: ", error)
-                self?.failure?(.urlRequestConstruction)
-            }
-        })
-        if interceptor == nil {
-            makeNetworkRequest(with: urlRequest, for: networkRequest)
-        }
-        return self
+    func setShouldLogTraffic(to shouldLog: Bool) {
+        shouldLogTraffic = shouldLog
     }
     
     func executeConcurrently(_ networkRequest: NetworkRequestProtocol) async -> NetworkResponse {
@@ -96,16 +82,17 @@ extension NetworkManager {
             var networkResponse = NetworkResponse()
             guard let urlRequest = constructURLRequest(networkRequest) else {
                 networkResponse.failure = NetworkFailure.urlRequestConstruction
-                continuation.resume(returning: networkResponse)
+                finishReturning(response: networkResponse, for: continuation)
                 return
             }
             interceptor?.adapt(urlRequest: urlRequest, networkRequest: networkRequest, completion: { [weak self] result in
                 switch result {
                 case .success(let request):
                     self?.makeConcurrentNetworkRequest(with: request, for: networkRequest, continuation: continuation)
-                case .failure(let error):
-                    print("Error while adapting request: ", networkResponse.failure)
-                    self?.handleErrorConcurrently(networkResponse: networkResponse, error, urlRequest, nil, networkRequest: networkRequest, continuation: continuation)
+                case .failure(let failure):
+                    print("Error while adapting request: ", failure)
+                    networkResponse.failure = failure
+                    self?.handleErrorConcurrently(networkResponse: networkResponse, urlRequest, networkRequest: networkRequest, continuation: continuation)
                 }
             })
             if interceptor == nil {
@@ -123,15 +110,14 @@ extension NetworkManager {
             }
             Task {
                 var response = await self.executeConcurrently(request)
-                // If request failed, return. Otherwise, try to decode to desired model
-                if let failure = response.failure {
+                if let _ = response.failure {
                     continuation.resume(returning: (response, nil))
                     return
                 }
                 guard
                     let data = response.data,
                     let model = try? JSONDecoder().decode(type, from: data) else {
-                        response.failure = NetworkFailure.decoding
+                        response.failure = .decoding
                         continuation.resume(returning: (response, nil))
                         return
                     }
@@ -140,6 +126,47 @@ extension NetworkManager {
         }
         return networkResponse
     }
+    
+//    func handleError(response: @escaping ErrorResponse) -> Self {
+//        failure = response
+//        return self
+//    }
+//
+//    func responseJson(response: @escaping JSONResponse) -> Self {
+//        jsonResponse = response
+//        return self
+//    }
+//
+//    func responseDecodable<T: Decodable>(of type: T.Type, response: @escaping (T?) -> Void) -> Self {
+//        decodingClosure = { data in
+//            guard let decodedObject =  try? JSONDecoder().decode(type, from: data) else {
+//                response(nil)
+//                return
+//            }
+//            response(decodedObject)
+//        }
+//        return self
+//    }
+//
+//    func execute(_ networkRequest: NetworkRequestProtocol) -> Self {
+//        guard let urlRequest = constructURLRequest(networkRequest) else {
+//            failure?(.urlRequestConstruction)
+//            return self
+//        }
+//        interceptor?.adapt(urlRequest: urlRequest, networkRequest: networkRequest, completion: { [weak self] result in
+//            switch result {
+//            case .success(let request):
+//                self?.makeNetworkRequest(with: request, for: networkRequest)
+//            case .failure(let error):
+//                print("Error while adapting request: ", error)
+//                self?.failure?(.urlRequestConstruction)
+//            }
+//        })
+//        if interceptor == nil {
+//            makeNetworkRequest(with: urlRequest, for: networkRequest)
+//        }
+//        return self
+//    }
 }
 
 // MARK: - Private methods
@@ -181,126 +208,188 @@ private extension NetworkManager {
         return formString.data(using: .utf8)
     }
     
-    func makeNetworkRequest(with urlRequest: URLRequest, for networkRequest: NetworkRequestProtocol) {
-        let task = URLSession.shared.dataTask(with: urlRequest) { [weak self] data, response, error in
-            // Validate response
-            guard let data = self?.validate(data: data, response: response, error: error, errorHandler: { [weak self] networkFailure in
-                self?.handleError(error, networkFailure: networkFailure, urlRequest, networkRequest: networkRequest, response)
-            }) else {
-                return
-            }
-            // Generate JSON object
-            guard
-                let jsonObject = try? JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed) as? [String : Any]
-            else {
-                self?.failure?(.jsonObject)
-                self?.jsonResponse?(nil)
-                return
-            }
-            // All good, return json object and decode to model if possible
-            self?.jsonResponse?(jsonObject)
-            self?.decodingClosure?(data)
-        }
-        task.resume()
-    }
-    
     func makeConcurrentNetworkRequest(with urlRequest: URLRequest, for networkRequest: NetworkRequestProtocol, continuation: CheckedContinuation<NetworkResponse, Never>) {
+        logOutgoingNetworkRequest(urlRequest: urlRequest, networkRequest: networkRequest)
         var networkResponse = NetworkResponse()
         let task = URLSession.shared.dataTask(with: urlRequest) { [weak self] data, response, error in
             // Validate response
-            guard
-                let data = self?.validate(data: data, response: response, error: error, errorHandler: { [weak self] networkFailure in
-                    networkResponse.failure = networkFailure
-                    self?.handleErrorConcurrently(networkResponse: networkResponse, error, urlRequest, response, networkRequest: networkRequest, continuation: continuation)
-                }) else {
-                    return
-                }
-            networkResponse.data = data
+            self?.takeInfoFromReceivedResponse(data: data, response: response, error: error, networkResponse: &networkResponse)
+            if networkResponse.failure != nil {
+                //continuation.resume(returning: networkResponse)
+                self?.handleErrorConcurrently(networkResponse: networkResponse, urlRequest, networkRequest: networkRequest, continuation: continuation)
+                return
+            }
             // Generate JSON object
-            guard let jsonObject = try? JSONSerialization.jsonObject(with: data)
-            else {
-                networkResponse.failure = NetworkFailure.jsonObject
-                continuation.resume(returning: networkResponse)
+            guard let data = data, let jsonObject = try? JSONSerialization.jsonObject(with: data) else {
+                self?.finishReturning(response: networkResponse, for: continuation)
                 return
             }
             // All good, return json object
             networkResponse.jsonResponse = jsonObject
-            continuation.resume(returning: networkResponse)
+            self?.finishReturning(response: networkResponse, for: continuation)
         }
         task.resume()
     }
     
-    func validate(data: Data?, response: URLResponse?, error: Error?,  errorHandler: ErrorResponse?) -> Data? {
-        guard
-            let data = data,
-            let response = response as? HTTPURLResponse else {
-                errorHandler?(.responseNotHTTP)
-                return nil
-            }
-        
-        
-        if (response.statusCode == 401) {
-            errorHandler?(.tokenExpired)
-            return nil
+    func takeInfoFromReceivedResponse(data: Data?, response: URLResponse?, error: Error?,  networkResponse: inout NetworkResponse) {
+        networkResponse.data = data
+        networkResponse.error = error
+        guard let httpResponse = response as? HTTPURLResponse else {
+                networkResponse.failure = .responseNotHTTP
+                return
         }
-        
-        guard (200...299).contains(response.statusCode) else {
-            errorHandler?(.statusCode)
-            return nil
-        }
-        if let _ = error {
-            errorHandler?(.serverError)
-            return nil
-        }
-        return data
-    }
-    
-    func handleError(_ error: Error?, networkFailure: NetworkFailure, _ request: URLRequest, networkRequest: NetworkRequestProtocol, _ reponse: URLResponse?) {
-        guard let interceptor = interceptor else {
-            failure?(networkFailure)
-            return
-        }
-        if(repeatCount < 1) {
-            print("Will not repeat anymore, returning error: ", error)
-            repeatCount = 1
-            failure?(networkFailure)
-        } else {
-            repeatCount -= 1
-            interceptor.retry(request, networkRequest: networkRequest, reponse, dueTo: error) { [weak self] retryResult in
-                switch retryResult {
-                case .retry:
-                    print("Repeating request that ended in error:", error)
-                    self?.makeNetworkRequest(with: request, for: networkRequest)
-                case .doNotRetry:
-                    print("Choosing not to repeat the request.")
-                    self?.failure?(networkFailure)
-                }
-            }
+        networkResponse.statusCode = httpResponse.statusCode
+        if !(200...299).contains(httpResponse.statusCode) {
+            networkResponse.failure = .statusCode(StatusCode.init(code: httpResponse.statusCode))
         }
     }
     
-    func handleErrorConcurrently(networkResponse: NetworkResponse, _ error: Error?, _ request: URLRequest, _ urlResponse: URLResponse?,  networkRequest: NetworkRequestProtocol, continuation: CheckedContinuation<NetworkResponse, Never>) {
+    func handleErrorConcurrently(networkResponse: NetworkResponse,  _ urlRequest: URLRequest, networkRequest: NetworkRequestProtocol, continuation: CheckedContinuation<NetworkResponse, Never>) {
+        logNetworkError(networkRequest: networkRequest, response: networkResponse)
         guard let interceptor = interceptor else {
-            continuation.resume(returning: networkResponse)
+            finishReturning(response: networkResponse, for: continuation)
             return
         }
-        if(repeatCount < 1) {
-            print("Will not repeat anymore, repeat count < 1, returning error: ", error ?? "")
+        if(repeatCount < 0) {
+            print("🛑 Will not repeat anymore, repeat count < 1")
             repeatCount = 1
-            continuation.resume(returning: networkResponse)
+            finishReturning(response: networkResponse, for: continuation)
         } else {
             repeatCount -= 1
-            interceptor.retry(request, networkRequest: networkRequest, urlResponse, dueTo: networkResponse.failure ?? error) { [weak self] retryResult in
+            interceptor.retry(networkRequest: networkRequest, response: networkResponse) { [weak self] retryResult in
                 switch retryResult {
                 case .retry:
-                    print("Repeating request that ended in error:", networkResponse.failure ?? "")
-                    self?.makeConcurrentNetworkRequest(with: request, for: networkRequest, continuation: continuation)
+                    interceptor.adapt(urlRequest: urlRequest, networkRequest: networkRequest, completion: { [weak self] result in
+                        switch result {
+                        case .success(let request):
+                            print("↩️ Repeating request that ended in error:", networkResponse.failure ?? "")
+                            self?.makeConcurrentNetworkRequest(with: request, for: networkRequest, continuation: continuation)
+                        case .failure(let failure):
+                            print("❌ Error while adapting request: ", failure)
+                            self?.handleErrorConcurrently(networkResponse: networkResponse, urlRequest, networkRequest: networkRequest, continuation: continuation)
+                        }
+                    })
                 case .doNotRetry:
-                    print("Choosing not to repeat the request.")
+                    self?.repeatCount = 1
+                    print("🛑 Choosing not to repeat the request.")
                     continuation.resume(returning: networkResponse)
                 }
             }
         }
     }
+    
+    func finishReturning(response: NetworkResponse, for continuation: CheckedContinuation<NetworkResponse, Never>) {
+        logIncomingNetworkResponse(response: response)
+        continuation.resume(returning: response)
+    }
+    
+    func logOutgoingNetworkRequest(urlRequest: URLRequest, networkRequest: NetworkRequestProtocol) {
+        guard shouldLogTraffic == true else { return }
+        print("↗️↗️ SENDING REQUEST ↗️↗️")
+        print("Full path: ", urlRequest)
+        if let headers = urlRequest.allHTTPHeaderFields {
+            print("Headers: ", headers)
+        }
+        if let body =  networkRequest.body {
+            print("Body: ", body)
+        }
+        print("HTTP Method: ", networkRequest.httpMethod)
+        print("Encoding: ", networkRequest.resourceEncoding)
+        print("↗️ * * * * * * * * * * ↗️")
+    }
+    
+    func logIncomingNetworkResponse(response: NetworkResponse) {
+        guard shouldLogTraffic == true else { return }
+        print("↙️↙️ RESPONSE ↙️↙️")
+        print("Response: ", response.jsonResponse ?? "EMPTY")
+        print("Status code: ", response.statusCode ?? "UNKNOWN")
+        if let failure = response.failure {
+            print("❌ Failure: ", failure)
+        }
+        print("↙️ * * * * * * * ↙️")
+    }
+    
+    func logNetworkError(networkRequest: NetworkRequestProtocol, response: NetworkResponse) {
+        guard shouldLogTraffic == true else { return }
+        print("❌❌ REQUEST FAILED ❌❌")
+        print("Full path: ", networkRequest.path)
+        print("Query params: ", networkRequest.path)
+        print("Headers: ", networkRequest.headers)
+        print("Body: ", networkRequest.body ?? "Empty.")
+        print("HTTP Method: ", networkRequest.httpMethod)
+        print("Encoding: ", networkRequest.resourceEncoding)
+        logIncomingNetworkResponse(response: response)
+    }
+    
+//    func makeNetworkRequest(with urlRequest: URLRequest, for networkRequest: NetworkRequestProtocol) {
+//        let task = URLSession.shared.dataTask(with: urlRequest) { [weak self] data, response, error in
+//            // Validate response
+//            guard let data = self?.validate(data: data, response: response, error: error, errorHandler: { [weak self] networkFailure in
+//                self?.handleError(error, networkFailure: networkFailure, urlRequest, networkRequest: networkRequest, response)
+//            }) else {
+//                return
+//            }
+//            // Generate JSON object
+//            guard
+//                let jsonObject = try? JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed) as? [String : Any]
+//            else {
+//                //self?.failure?(.jsonObject)
+//                self?.jsonResponse?(nil)
+//                return
+//            }
+//            // All good, return json object and decode to model if possible
+//            self?.jsonResponse?(jsonObject)
+//            self?.decodingClosure?(data)
+//        }
+//        task.resume()
+//    }
+    
+    
+    
+//    func validate(data: Data?, response: URLResponse?, error: Error?,  errorHandler: ErrorResponse?) -> Data? {
+//        guard
+//            let data = data,
+//            let response = response as? HTTPURLResponse else {
+//                errorHandler?(.responseNotHTTP)
+//                return nil
+//            }
+//
+////        guard (200...299).contains(response.statusCode) else {
+////            errorHandler?(.statusCode(.init(code: response.statusCode)))
+////            return nil
+////        }
+//        if let _ = error {
+//            errorHandler?(.error)
+//            return nil
+//        }
+//        return data
+//    }
+
+//    func handleError(_ error: Error?, networkFailure: NetworkFailure, _ request: URLRequest, networkRequest: NetworkRequestProtocol, _ reponse: URLResponse?) {
+//        guard let interceptor = interceptor else {
+//            failure?(networkFailure)
+//            return
+//        }
+//        if(repeatCount < 1) {
+//            print("Will not repeat anymore, returning error: ", error)
+//            repeatCount = 1
+//            failure?(networkFailure)
+//        } else {
+//            repeatCount -= 1
+////            interceptor.retry(networkRequest: networkRequest, response: reponse) { [weak self] retryResult in
+////                switch retryResult {
+////                case .retry:
+////                    print("Repeating request that ended in error:", error)
+////                    self?.makeNetworkRequest(with: request, for: networkRequest)
+////                case .doNotRetry:
+////                    print("Choosing not to repeat the request.")
+////                    self?.failure?(networkFailure)
+////                }
+////            }
+//        }
+//
+//    }
+
+   
 }
 

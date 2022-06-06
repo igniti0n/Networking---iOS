@@ -11,7 +11,7 @@ enum HTTPMetod: String {
     case GET, POST, PUT, PATCH, DELETE
 }
 
-enum ResourceEncoding {
+enum ResourceEncoding: String {
     case urlEncoded
     case json
 }

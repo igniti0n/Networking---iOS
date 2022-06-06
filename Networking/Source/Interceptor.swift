@@ -13,7 +13,25 @@ enum RetryResult {
 }
 
 protocol Interceptor {
-    func adapt( urlRequest: URLRequest, networkRequest: NetworkRequestProtocol, completion: @escaping (Result<URLRequest, Error>) -> Void)
-    func retry(_ request: URLRequest, networkRequest: NetworkRequestProtocol, _ reponse: URLResponse?, dueTo error: Error?, completion: @escaping (RetryResult) -> Void)
+    func adapt( urlRequest: URLRequest, networkRequest: NetworkRequestProtocol, completion: @escaping (Result<URLRequest, NetworkFailure>) -> Void)
+    func retry(networkRequest: NetworkRequestProtocol, response: NetworkResponse, completion: @escaping (RetryResult) -> Void)
 }
 
+class CustomInterceptor: Interceptor {
+    func getTokenFromUserDefaults() -> String? {
+        let defaults = UserDefaults.standard
+        return defaults.value(forKey: "token") as? String
+    }
+    
+    func adapt(urlRequest: URLRequest, networkRequest: NetworkRequestProtocol, completion: @escaping (Result<URLRequest, NetworkFailure>) -> Void) {
+        var newUrlRequest = urlRequest
+        if let token = getTokenFromUserDefaults(), !token.isEmpty {
+            //newUrlRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        completion(.success(newUrlRequest))
+    }
+    
+    func retry(networkRequest: NetworkRequestProtocol, response: NetworkResponse, completion: @escaping (RetryResult) -> Void) {
+        completion(.retry)
+    }
+}

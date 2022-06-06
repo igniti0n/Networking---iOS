@@ -11,6 +11,7 @@
 		A52ADEEE27FC369B00791875 /* AuthRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = A52ADEED27FC369B00791875 /* AuthRequest.swift */; };
 		A52ADEF027FC473F00791875 /* DevicesListRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = A52ADEEF27FC473F00791875 /* DevicesListRequest.swift */; };
 		A52ADEF327FC475C00791875 /* API.swift in Sources */ = {isa = PBXBuildFile; fileRef = A52ADEF227FC475C00791875 /* API.swift */; };
+		A53D0D52284E07FD00878388 /* Configuration.swift in Sources */ = {isa = PBXBuildFile; fileRef = A53D0D51284E07FD00878388 /* Configuration.swift */; };
 		A567D2672804D70E00827CE0 /* TokenModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A567D2662804D70E00827CE0 /* TokenModel.swift */; };
 		A5F08E2327D8A82C00E8276F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5F08E2227D8A82C00E8276F /* AppDelegate.swift */; };
 		A5F08E2527D8A82C00E8276F /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5F08E2427D8A82C00E8276F /* SceneDelegate.swift */; };
@@ -28,6 +29,7 @@
 		A52ADEED27FC369B00791875 /* AuthRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthRequest.swift; sourceTree = "<group>"; };
 		A52ADEEF27FC473F00791875 /* DevicesListRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevicesListRequest.swift; sourceTree = "<group>"; };
 		A52ADEF227FC475C00791875 /* API.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = API.swift; sourceTree = "<group>"; };
+		A53D0D51284E07FD00878388 /* Configuration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Configuration.swift; sourceTree = "<group>"; };
 		A567D2662804D70E00827CE0 /* TokenModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenModel.swift; sourceTree = "<group>"; };
 		A5F08E1F27D8A82C00E8276F /* Networking.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Networking.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A5F08E2227D8A82C00E8276F /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -98,6 +100,7 @@
 		A5F08E3627D8A9F700E8276F /* Source */ = {
 			isa = PBXGroup;
 			children = (
+				A53D0D51284E07FD00878388 /* Configuration.swift */,
 				A52ADEF427FC476600791875 /* Requests */,
 				A5F08E3727D8BAB700E8276F /* NetworkRequest.swift */,
 				A5F08E3B27D8CBC700E8276F /* NetworkResponse.swift */,
@@ -184,6 +187,7 @@
 				A5F08E2727D8A82C00E8276F /* ViewController.swift in Sources */,
 				A52ADEF027FC473F00791875 /* DevicesListRequest.swift in Sources */,
 				A52ADEF327FC475C00791875 /* API.swift in Sources */,
+				A53D0D52284E07FD00878388 /* Configuration.swift in Sources */,
 				A5F08E2327D8A82C00E8276F /* AppDelegate.swift in Sources */,
 				A5F08E3827D8BAB700E8276F /* NetworkRequest.swift in Sources */,
 				A5F08E2527D8A82C00E8276F /* SceneDelegate.swift in Sources */,
