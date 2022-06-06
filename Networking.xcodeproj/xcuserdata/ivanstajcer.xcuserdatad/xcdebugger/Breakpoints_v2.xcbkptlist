@@ -14,8 +14,8 @@
             filePath = "Networking/Source/NetworkManager.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "368"
-            endingLineNumber = "368"
+            startingLineNumber = "369"
+            endingLineNumber = "369"
             landmarkName = "NetworkManager"
             landmarkType = "21">
          </BreakpointContent>

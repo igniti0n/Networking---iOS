@@ -318,7 +318,8 @@ private extension NetworkManager {
         print("Body: ", networkRequest.body ?? "Empty.")
         print("HTTP Method: ", networkRequest.httpMethod)
         print("Encoding: ", networkRequest.resourceEncoding)
-        logIncomingNetworkResponse(response: response)
+        print("Status code: ", response.statusCode ?? "UNKNOWN")
+        print("❌ * * * * * * * * * * ❌")
     }
     
 //    func makeNetworkRequest(with urlRequest: URLRequest, for networkRequest: NetworkRequestProtocol) {
