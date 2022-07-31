@@ -18,14 +18,14 @@ class ConfigurationProvider {
     let baseHeaders = ["Content-Type" : "application/json"]
     let loginGrantType = "password";
     let refreshTokenGrantType = "refresh_token";
-    private let stageClientId = "inTOUCH4";
-    private let stageClientSecret = "NFIAOfrwjhr289u41!Ndo";
+    private let stageClientId = "";
+    private let stageClientSecret = "";
     private let stageScope =
-    "alkoCustomerId alkoCulture offline_access introspection alkoGroups";
-    private let prodClientId = "inTOUCH4";
-    private let prodClientSecret = "dsadhi342413nknjk14";
-    private let prodScope = "alkoCustomerId alkoCulture offline_access introspection alkoGroups";
-    private let configUserDefaultsKey = "isStagingConfiguration"
+    "";
+    private let prodClientId = "";
+    private let prodClientSecret = "";
+    private let prodScope = "";
+    private let configUserDefaultsKey = ""
     
     // MARK: - Current Configuration
     private var current: Configuration {
@@ -43,27 +43,27 @@ class ConfigurationProvider {
     var urlDevices: String {
         switch current {
         case .staging:
-            return "https://staging.al-ko.com/v1/iot/"
+            return "https:"
         case .production:
-            return "https://api.al-ko.com/v1/iot/"
+            return "https:"
         }
     }
     
     var urlAuth: String {
         switch current {
         case .staging:
-            return "https://alkogtidentity.azurewebsites.net/"
+            return "https://..net/"
         case .production:
-            return "https://idp.al-ko.com/"
+            return ""
         }
     }
     
     var socketUrl: String {
         switch current {
         case .staging:
-            return "wss://socket-staging.al-ko.com/v1"
+            return "wss://"
         case .production:
-            return "wss://socket.al-ko.com/v1"
+            return "wss://"
         }
     }
     

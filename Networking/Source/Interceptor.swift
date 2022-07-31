@@ -17,6 +17,17 @@ protocol Interceptor {
     func retry(networkRequest: NetworkRequestProtocol, response: NetworkResponse, completion: @escaping (RetryResult) -> Void)
 }
 
+extension Interceptor {
+    func adapt(urlRequest: URLRequest, networkRequest: NetworkRequestProtocol, completion: @escaping (Result<URLRequest, NetworkFailure>) -> Void) {
+        completion(.success(urlRequest))
+    }
+    
+    func retry(networkRequest: NetworkRequestProtocol, response: NetworkResponse, completion: @escaping (RetryResult) -> Void) {
+        completion(.doNotRetry)
+    }
+}
+
+
 class CustomInterceptor: Interceptor {
     func getTokenFromUserDefaults() -> String? {
         let defaults = UserDefaults.standard

@@ -41,7 +41,7 @@ class ViewController: UIViewController {
     @objc func onReqSuccessTap() {
         Task {
             var authReq = AuthRequest()
-            authReq.createBody(username: "ivan.stajcer@gmail.com", password: "@Cobe1234")
+            authReq.createBody(username: "ivan.stajcer@gmail.com", password: "")
             let response = await authenticationNetworkManager.executeConcurrently(authReq, decodeWith: TokenModel.self)
             let accesToken = response.model?.accessToken ?? ""
             storeTokenToUserDefaults(accesToken)
